@@ -8,12 +8,23 @@ quizzes you on what you've learned.
 - Works on phone and computer. You can install it to your home screen.
 - Your cards sync between all your devices (stored in Upstash Redis).
 - A password you choose protects your data and your Gemini quota.
-- Free to run: Vercel Hobby, the Upstash free tier and the Gemini free tier are all enough for one person.
+- Free to run: Vercel Hobby and the Upstash free tier are enough for one person.
+
+## Two ways to use Gemini
+
+| | **Gemini app mode** (no API key) | **Built-in mode** (with API key) |
+|---|---|---|
+| Setup | Nothing | Add `GEMINI_API_KEY` in Vercel |
+| How it works | Recall copies a ready-made prompt and opens gemini.google.com (or the Gemini app on your phone), using your normal Gemini / Gemini Pro account. You paste Gemini's card list back into Recall. | Explanations, generated cards and quiz grading appear inside Recall. |
+
+The app picks the mode automatically: once a `GEMINI_API_KEY` is set, it switches to built-in mode.
+A Gemini Pro subscription and an API key are separate Google products. The subscription covers the Gemini app; the API key comes from AI Studio and has its own free tier and limits.
 
 ## Deploy (about 10 minutes, one time)
 
-### 1. Get a Gemini API key
+### 1. (Optional) Get a Gemini API key
 Go to <https://aistudio.google.com/apikey>, sign in, and click **Create API key**. Copy it.
+Skip this step to use Gemini app mode.
 
 ### 2. Import the repo into Vercel
 1. Sign in at <https://vercel.com> with your GitHub account.
@@ -24,7 +35,7 @@ Go to <https://aistudio.google.com/apikey>, sign in, and click **Create API key*
    | Name | Value |
    |---|---|
    | `APP_PASSWORD` | a password you'll type on each device |
-   | `GEMINI_API_KEY` | the key from step 1 |
+   | `GEMINI_API_KEY` | *(optional)* the key from step 1 |
    | `GEMINI_MODEL` | *(optional)* defaults to `gemini-flash-latest` |
 
 5. Click **Deploy**.
@@ -51,6 +62,7 @@ In the old file, go to **Cards → Export backup**. Then in the hosted app, use 
 | `merge.js` | Merges data from two devices; shared by browser and server |
 | `api/sync.js` | Saves and loads your data in Upstash Redis |
 | `api/ai.js` | Forwards requests to Gemini, so your API key never reaches the browser |
+| `api/config.js` | Tells the app whether built-in AI is available |
 | `api/_lib.js` | Password check and helpers |
 | `sw.js`, `manifest.webmanifest`, icons | Phone install and offline support |
 

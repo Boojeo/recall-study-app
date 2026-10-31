@@ -1,5 +1,5 @@
 // Lets the app open on your phone even with no signal. Always tries the network first.
-const CACHE = 'recall-v2';
+const CACHE = 'recall-v3';
 const ASSETS = ['/', '/index.html', '/merge.js', '/manifest.webmanifest', '/icon-192.png'];
 
 self.addEventListener('install', e => {

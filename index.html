@@ -47,9 +47,9 @@
   @media (max-width: 500px) { .card { padding: 16px; } main { padding: 16px 12px 80px; } }
   .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
   .grow { flex: 1; min-width: 0; }
-  button.btn { font: inherit; padding: 9px 16px; border-radius: 9px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; }
-  button.btn:hover { border-color: var(--accent); }
-  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  .btn { display: inline-block; font: inherit; padding: 9px 16px; border-radius: 9px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; }
+  .btn:hover { border-color: var(--accent); }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
   button.small { padding: 5px 11px; font-size: .85rem; }
   button.danger { color: var(--bad); }
   button:disabled { opacity: .5; cursor: not-allowed; }
@@ -128,6 +128,15 @@
   </form>
 </div>
 
+<div id="promptDlg" class="overlay" hidden style="background:rgba(0,0,0,.45)">
+  <div class="card" style="max-width:560px;width:100%;margin:0">
+    <strong>Copy this prompt into Gemini</strong>
+    <p class="hint" style="margin-top:4px">Automatic copy wasn't allowed here. Select all and copy it, then paste it into Gemini.</p>
+    <textarea id="promptText" dir="auto" rows="10" readonly></textarea>
+    <div class="row" style="margin-top:12px"><a class="btn primary" href="https://gemini.google.com/app" target="_blank" rel="noopener" style="text-decoration:none">Open Gemini</a><button class="btn" id="promptClose">Close</button></div>
+  </div>
+</div>
+
 <header>
   <div class="brand"><h1>🧠 Recall</h1><button class="sync" id="syncBtn" title="Sync status"><i>●</i> <span>Local</span></button></div>
   <nav role="tablist" id="nav">
@@ -153,7 +162,10 @@
 <section id="tutor" class="panel">
   <h2>AI tutor</h2>
   <p class="sub">Powered by Gemini. Use it to understand, then do the remembering yourself.</p>
-  <div id="aiOff" class="card empty" hidden>The AI tutor works on the hosted version of this app (deployed to Vercel with a Gemini API key). See the README.</div>
+  <div id="aiAppNote" class="card" hidden style="background:var(--soft)">
+    <strong>Using your Gemini app</strong>
+    <p class="hint" style="margin-top:4px">Each button copies a ready-made prompt and opens Gemini. Paste it there (Ctrl+V, or long-press → Paste on a phone), then copy Gemini's reply back here. Works with your Gemini Pro account. To have answers appear right inside Recall, add a Gemini API key (see the README).</p>
+  </div>
   <div id="aiOn">
     <div class="seg" role="group" aria-label="Tutor mode">
       <button data-mode="make" aria-pressed="true">Make cards</button>
@@ -172,6 +184,11 @@
         <div class="row" style="margin-top:12px"><button class="btn primary" id="genBtn">Generate cards</button><span class="hint" id="genStatus" style="margin:0"></span></div>
         <p class="hint">Tip: cards you write yourself stick better (the generation effect). Use AI cards as a starting point and edit them in your own words.</p>
       </div>
+      <div class="card paste-box" hidden>
+        <label for="genPaste">Paste Gemini's reply here (lines like <code>question :: answer</code>)</label>
+        <textarea id="genPaste" dir="auto" rows="5"></textarea>
+        <div class="row" style="margin-top:12px"><button class="btn primary" id="genImport">Review &amp; add cards</button></div>
+      </div>
       <div id="genOut"></div>
     </div>
 
@@ -183,6 +200,11 @@
         <p class="hint">Gemini asks deeper questions about cards you've already studied: why, how, apply it, compare. Explaining in your own words is one of the strongest ways to make knowledge stick.</p>
       </div>
       <div id="quizBox"></div>
+      <div class="card paste-box" hidden>
+        <label for="quizPaste">When the quiz in Gemini ends, it lists what you missed as <code>question :: answer</code>. Paste that here to save them as cards.</label>
+        <textarea id="quizPaste" dir="auto" rows="5"></textarea>
+        <div class="row" style="margin-top:12px"><button class="btn primary" id="quizImport">Review &amp; add cards</button></div>
+      </div>
     </div>
 
     <div class="tmode" id="m-ask" hidden>
@@ -292,7 +314,37 @@ const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const $ = id => document.getElementById(id);
 const getPw = () => localStorage.getItem(PW_KEY) || '';
-const aiOn = () => HOSTED && !!getPw();
+// 'api': answers appear inside the app (server has a GEMINI_API_KEY).
+// 'app': no key, so prompts are copied and the Gemini app/website opens (works with a Gemini Pro subscription).
+let serverAI = localStorage.getItem('recall.ai') === '1';
+const aiMode = () => HOSTED && getPw() && serverAI ? 'api' : 'app';
+const GEMINI_URL = 'https://gemini.google.com/app';
+
+function handoff(prompt) {
+  const fallback = () => { $('promptText').value = prompt; $('promptDlg').hidden = false; $('promptText').select(); };
+  try {
+    navigator.clipboard.writeText(prompt)
+      .then(() => toast('Prompt copied. Paste it into Gemini.'))
+      .catch(fallback);
+  } catch (_) { fallback(); }
+  window.open(GEMINI_URL, '_blank', 'noopener');
+}
+$('promptClose').onclick = () => { $('promptDlg').hidden = true; };
+
+// Reads "question :: answer" lines out of whatever Gemini replied (ignores bullets, numbering, bold, code fences).
+function parseCards(text) {
+  return String(text).split('\n').map(l => l.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').replace(/\*\*/g, '').trim())
+    .filter(l => l.includes('::') && !l.startsWith('```'))
+    .map(l => { const i = l.indexOf('::'); return { q: l.slice(0, i).trim(), a: l.slice(i + 2).trim() }; })
+    .filter(c => c.q && c.a);
+}
+
+function checkAI() {
+  if (!HOSTED || !getPw()) return;
+  api('/api/config', {}).then(j => {
+    serverAI = !!j.ai; localStorage.setItem('recall.ai', serverAI ? '1' : '0'); updateTutorVisibility();
+  }).catch(() => {});
+}
 
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
 
@@ -438,7 +490,7 @@ $('loginForm').onsubmit = async e => {
   $('login').hidden = true; $('pw').value = '';
   if (!r.ok) toast(r.error ? 'Signed in, but sync failed: ' + r.error : 'Signed in (offline)');
   else toast('Signed in and synced');
-  updateTutorVisibility();
+  checkAI();
 };
 $('syncBtn').onclick = () => HOSTED && (getPw() ? sync() : showLogin());
 $('syncNow').onclick = () => HOSTED ? sync().then(r => toast(r.ok ? 'Synced' : 'Sync failed: ' + (r.error || 'not signed in'))) : toast('Sync needs the hosted version');
@@ -565,7 +617,7 @@ function reveal() {
   $('reveal').innerHTML = `
     ${mine ? `<div class="mine" dir="auto"><small>Your answer</small>${esc(mine)}</div>` : ''}
     <div class="answer" dir="auto"><span class="tag">Answer</span>${esc(c.a)}</div>
-    ${aiOn() ? '<div style="margin-top:10px"><button class="btn small" id="explainBtn">🤖 Explain this</button></div><div id="explainBox"></div>' : ''}
+    <div style="margin-top:10px"><button class="btn small" id="explainBtn">🤖 ${aiMode() === 'api' ? 'Explain this' : 'Explain in Gemini'}</button></div><div id="explainBox"></div>
     <div class="rate">
       <button class="r1" data-r="1">Again${lbl(1)}</button>
       <button class="r2" data-r="2">Hard${lbl(2)}</button>
@@ -575,16 +627,18 @@ function reveal() {
     <p class="hint">Be honest: <b>Again</b> = blank or wrong, <b>Hard</b> = right but slow or shaky, <b>Good</b> = right with effort, <b>Easy</b> = instant.</p>`;
   $('showBtn').style.display = 'none';
   document.querySelectorAll('.rate button').forEach(b => b.onclick = () => rate(+b.dataset.r));
-  if (aiOn()) $('explainBtn').onclick = () => explainCard(c, mine);
+  $('explainBtn').onclick = () => aiMode() === 'api' ? explainCard(c, mine) : handoff(TUTOR_SYS + '\n\n' + explainPrompt(c, mine));
 }
+
+const explainPrompt = (c, mine) =>
+  `I'm studying this flashcard.\nQuestion: ${c.q}\nAnswer: ${c.a}\n${mine ? `My attempt was: ${mine}\n` : ''}` +
+  `Help me understand WHY this is the answer so it makes sense and sticks. Use a simple example or analogy. ${mine ? 'If my attempt was wrong or incomplete, tell me exactly what I missed. ' : ''}Keep it under 150 words.`;
 
 async function explainCard(c, mine) {
   const id = c.id, btn = $('explainBtn');
   btn.disabled = true; $('explainBox').innerHTML = '<div class="ai"><span class="spin"></span>Thinking…</div>';
   try {
-    const text = await askAI(TUTOR_SYS, [{ role: 'user', text:
-      `I'm studying this flashcard.\nQuestion: ${c.q}\nAnswer: ${c.a}\n${mine ? `My attempt was: ${mine}\n` : ''}` +
-      `Help me understand WHY this is the answer so it makes sense and sticks. Use a simple example or analogy. ${mine ? 'If my attempt was wrong or incomplete, tell me exactly what I missed. ' : ''}Keep it under 150 words.` }]);
+    const text = await askAI(TUTOR_SYS, [{ role: 'user', text: explainPrompt(c, mine) }]);
     if (sess && sess.queue[0] === id && $('explainBox')) $('explainBox').innerHTML = `<div class="ai" dir="auto">${md(text)}</div>`;
   } catch (e) {
     if ($('explainBox')) $('explainBox').innerHTML = `<div class="ai">⚠️ ${esc(e.message)}</div>`;
@@ -618,7 +672,7 @@ function finishSession() {
   el.innerHTML = `<div class="card empty"><div style="font-size:2.2rem">✅</div><h2>Session complete</h2>
     <p>${n} card${n === 1 ? '' : 's'} reviewed${n ? ` · ${Math.round(good / n * 100)}% recalled well` : ''}.</p>
     <p class="hint">Come back tomorrow. Spacing only works if you actually return. Sleep also helps consolidate what you just practiced.</p>
-    <div class="row" style="justify-content:center"><button class="btn primary" id="doneBtn">Back</button>${aiOn() && n ? '<button class="btn" id="quizAfter">🤖 Quiz me deeper</button>' : ''}</div></div>`;
+    <div class="row" style="justify-content:center"><button class="btn primary" id="doneBtn">Back</button>${n ? '<button class="btn" id="quizAfter">🤖 Quiz me deeper</button>' : ''}</div></div>`;
   $('doneBtn').onclick = () => { sess = null; renderStudyHome(); };
   if ($('quizAfter')) $('quizAfter').onclick = () => { sess = null; renderStudyHome(); showTab('tutor'); setMode('quiz'); };
 }
@@ -644,7 +698,14 @@ const CARDS_SYS = 'You write high-quality flashcards for spaced-repetition study
 const QUIZ_SYS = 'You are a tutor who checks deep understanding. Based only on the material the learner has studied, write open-ended questions that make them explain, apply, compare, or give an example, rather than repeating a card word for word. Mix easier and harder questions. Each question is one or two sentences. Use the same language as the material.';
 const GRADE_SYS = 'You are a supportive but honest tutor grading a short answer. Judge whether the learner shows correct understanding, using the material and well-established knowledge. verdict must be "correct", "partial" or "incorrect". feedback: 2 to 4 sentences covering what was right, what was missing or wrong, and one tip to remember it. ideal: a concise model answer (under 50 words). Reply in the language of the question.';
 
-function updateTutorVisibility() { $('aiOff').hidden = aiOn(); $('aiOn').hidden = !aiOn(); }
+function updateTutorVisibility() {
+  const app = aiMode() === 'app';
+  $('aiAppNote').hidden = !app;
+  document.querySelectorAll('.paste-box').forEach(el => el.hidden = !app);
+  $('genBtn').textContent = app ? 'Copy prompt & open Gemini' : 'Generate cards';
+  $('quizStart').textContent = app ? 'Start quiz in Gemini' : 'Start quiz (5 questions)';
+  $('askBtn').textContent = app ? 'Ask in Gemini' : 'Send';
+}
 document.querySelectorAll('.seg button').forEach(b => b.onclick = () => setMode(b.dataset.mode));
 function setMode(m) {
   document.querySelectorAll('.seg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === m));
@@ -658,6 +719,7 @@ let genCards = [];
 $('genBtn').onclick = async () => {
   const src = $('genSrc').value.trim(), n = +$('genN').value;
   if (!src) return toast('Paste some notes or type a topic first');
+  if (aiMode() === 'app') return handoff(`${CARDS_SYS}\n\nCreate ${n} flashcards from the material below. Output ONLY the cards, one per line, in exactly this format:\nquestion :: answer\nNo numbering, headings or extra text.\n\nMaterial:\n${src}`);
   $('genBtn').disabled = true; busy($('genStatus'), true, 'Writing cards…');
   try {
     const out = await askAI(CARDS_SYS, [{ role: 'user', text: `Create ${n} flashcards from the following:\n\n${src}` }],
@@ -688,6 +750,16 @@ function renderGen() {
   };
   $('genDiscard').onclick = () => { genCards = []; renderGen(); };
 }
+function importPasted(box, deck) {
+  const cards = parseCards($(box).value);
+  if (!cards.length) return toast('No "question :: answer" lines found in what you pasted');
+  genCards = cards; $(box).value = '';
+  if (deck) $('genDeck').value = deck;
+  setMode('make'); renderGen();
+  $('genOut').scrollIntoView({ behavior: 'smooth' });
+}
+$('genImport').onclick = () => importPasted('genPaste');
+$('quizImport').onclick = () => importPasted('quizPaste', $('quizDeck').value || 'Quiz review');
 
 // Quiz me
 let quiz = null;
@@ -703,6 +775,12 @@ $('quizStart').onclick = async () => {
   if (!pool.length) return busy($('quizStatus'), false, deck ? 'Study some cards in this deck first.' : 'Study some cards first, then I can quiz you on them.');
   pool = pool.sort((a, b) => (last[b.id] || 0) - (last[a.id] || 0)).slice(0, 15);
   const material = pool.map(c => `Q: ${c.q}\nA: ${c.a}`).join('\n\n');
+  if (aiMode() === 'app') return handoff(
+    `You are my tutor and you check deep understanding. Here are flashcards I have studied:\n\n${material}\n\n` +
+    'Quiz me with 5 open-ended questions that make me explain, apply, compare or give an example (not just repeat a card). ' +
+    'Ask ONE question at a time and wait for my answer. After each answer, say whether it is correct, partly right or incorrect, explain what I missed in 2-4 sentences, and give a short model answer. ' +
+    'After the last question, give my score, then list every question I did not fully get right, one per line, in exactly this format:\nquestion :: model answer\n' +
+    'Use the same language as the flashcards. Start with question 1 now.');
   $('quizStart').disabled = true; busy($('quizStatus'), true, 'Writing questions…');
   try {
     const out = await askAI(QUIZ_SYS, [{ role: 'user', text: `Material I have studied:\n\n${material}\n\nWrite 5 questions.` }],
@@ -780,6 +858,7 @@ function renderChat() {
 }
 async function sendAsk() {
   const text = $('askIn').value.trim(); if (!text) return;
+  if (aiMode() === 'app') { handoff(`${TUTOR_SYS}\n\nMy question: ${text}`); $('askIn').value = ''; return; }
   $('askIn').value = ''; $('askBtn').disabled = true;
   chat.push({ role: 'user', text }); chat.push({ role: 'model', text: '', pending: true }); renderChat();
   try {
@@ -985,7 +1064,7 @@ localStorage.setItem(KEY, JSON.stringify(S));
 renderStudyHome(); refreshDecks(); tRender(); updateTutorVisibility();
 setSync('local');
 if (HOSTED) {
-  if (getPw()) sync(); else showLogin();
+  if (getPw()) { sync(); checkAI(); } else showLogin();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
   document.addEventListener('visibilitychange', () => { if (getPw()) sync(); }); // pull changes from other devices
   window.addEventListener('online', () => getPw() && sync());
