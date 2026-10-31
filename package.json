@@ -1,0 +1,6 @@
+{
+  "name": "recall-study-app",
+  "private": true,
+  "type": "module",
+  "description": "Evidence-based study app: spaced repetition, retrieval practice, and a Gemini tutor."
+}

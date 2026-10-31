@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#3b5bdb">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Recall">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<title>Recall — evidence-based study app</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --ink: #1d2433; --muted: #5d6779; --line: #e3e6ec;
+    --accent: #3b5bdb; --accent-ink: #ffffff; --good: #2b8a3e; --warn: #e8890c; --bad: #c92a2a;
+    --soft: #eef1fb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151c; --card: #1b2030; --ink: #e8ebf3; --muted: #9aa3b5; --line: #2a3145;
+      --accent: #748ffc; --accent-ink: #0d1020; --good: #69db7c; --warn: #ffa94d; --bad: #ff8787;
+      --soft: #232a42;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--ink); -webkit-text-size-adjust: 100%; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; padding: 12px 20px; padding-top: max(12px, env(safe-area-inset-top)); background: var(--card); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 1.15rem; margin: 0; letter-spacing: .2px; }
+  .sync { background: none; border: 1px solid var(--line); border-radius: 99px; padding: 3px 10px; font: inherit; font-size: .78rem; color: var(--muted); cursor: pointer; }
+  .sync.ok i { color: var(--good); } .sync.busy i { color: var(--accent); } .sync.off i { color: var(--warn); } .sync i { font-style: normal; }
+  nav { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+  nav::-webkit-scrollbar { display: none; }
+  nav button { background: none; border: 0; padding: 8px 13px; border-radius: 8px; font: inherit; color: var(--muted); cursor: pointer; white-space: nowrap; }
+  nav button:hover { background: var(--soft); }
+  nav button[aria-selected="true"] { background: var(--soft); color: var(--accent); font-weight: 600; }
+  @media (max-width: 760px) {
+    header { padding-left: 12px; padding-right: 12px; padding-bottom: 6px; }
+    .brand { width: 100%; justify-content: space-between; }
+    nav { width: 100%; } nav button { padding: 8px 11px; }
+  }
+  main { max-width: 820px; margin: 0 auto; padding: 24px 16px 80px; padding-bottom: max(80px, env(safe-area-inset-bottom)); }
+  .panel { display: none; } .panel.active { display: block; }
+  h2 { margin: 0 0 4px; font-size: 1.4rem; } .sub { color: var(--muted); margin: 0 0 20px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin-bottom: 16px; }
+  @media (max-width: 500px) { .card { padding: 16px; } main { padding: 16px 12px 80px; } }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .grow { flex: 1; min-width: 0; }
+  button.btn { font: inherit; padding: 9px 16px; border-radius: 9px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; }
+  button.btn:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  button.small { padding: 5px 11px; font-size: .85rem; }
+  button.danger { color: var(--bad); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  input, select, textarea { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 9px; padding: 9px 11px; width: 100%; }
+  input[type=checkbox] { width: 20px; height: 20px; flex: none; accent-color: var(--accent); margin-top: 10px; }
+  textarea { resize: vertical; min-height: 64px; }
+  input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  label { display: block; font-size: .85rem; color: var(--muted); margin: 0 0 4px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  .stat b { display: block; font-size: 1.7rem; line-height: 1.1; } .stat span { color: var(--muted); font-size: .85rem; }
+  /* review */
+  .prompt { font-size: 1.3rem; font-weight: 600; min-height: 40px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .answer { font-size: 1.15rem; white-space: pre-wrap; border-top: 1px dashed var(--line); margin-top: 14px; padding-top: 14px; overflow-wrap: anywhere; }
+  .mine { background: var(--soft); border-radius: 9px; padding: 10px 12px; margin-top: 12px; white-space: pre-wrap; font-size: .95rem; }
+  .mine small, .tag { color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .6px; display: block; }
+  .rate { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 16px; }
+  .rate button { padding: 12px 4px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; cursor: pointer; }
+  .rate button small { display: block; color: var(--muted); font-size: .75rem; }
+  .rate button:hover { border-color: var(--accent); }
+  .r1 { border-bottom: 3px solid var(--bad) !important; } .r2 { border-bottom: 3px solid var(--warn) !important; }
+  .r3 { border-bottom: 3px solid var(--good) !important; } .r4 { border-bottom: 3px solid var(--accent) !important; }
+  .progress { height: 6px; background: var(--line); border-radius: 99px; overflow: hidden; margin-bottom: 14px; }
+  .progress i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .2s; }
+  .hint { color: var(--muted); font-size: .85rem; margin-top: 10px; }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 99px; background: var(--soft); color: var(--accent); font-size: .78rem; font-weight: 600; }
+  /* AI output */
+  .ai { background: var(--soft); border-radius: 10px; padding: 12px 14px; margin-top: 12px; overflow-wrap: anywhere; }
+  .ai p { margin: 0 0 8px; } .ai p:last-child { margin-bottom: 0; } .ai ul, .ai ol { margin: 0 0 8px; padding-left: 22px; }
+  .ai code { background: var(--card); padding: 1px 5px; border-radius: 5px; font-size: .9em; }
+  .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -2px; margin-right: 6px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .seg { display: inline-flex; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 3px; margin-bottom: 16px; gap: 2px; }
+  .seg button { border: 0; background: none; font: inherit; padding: 7px 14px; border-radius: 8px; color: var(--muted); cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--soft); color: var(--accent); font-weight: 600; }
+  .gen { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--line); }
+  .gen textarea { min-height: 44px; margin-bottom: 6px; }
+  .chat { display: flex; flex-direction: column; gap: 10px; max-height: 60vh; overflow-y: auto; }
+  .msg { max-width: 88%; padding: 10px 13px; border-radius: 12px; overflow-wrap: anywhere; }
+  .msg.user { align-self: flex-end; background: var(--accent); color: var(--accent-ink); white-space: pre-wrap; }
+  .msg.model { align-self: flex-start; background: var(--soft); }
+  .msg.model p { margin: 0 0 8px; } .msg.model ul, .msg.model ol { margin: 0 0 8px; padding-left: 22px; }
+  .v-correct { background: #d3f9d8; color: #1e6b2e; } .v-partial { background: #fff0d1; color: #8a5200; } .v-incorrect { background: #ffe0e0; color: #9c1f1f; }
+  @media (prefers-color-scheme: dark) { .v-correct { background: #1f3d27; color: #8ce99a; } .v-partial { background: #44361a; color: #ffd08a; } .v-incorrect { background: #4a2323; color: #ffa8a8; } }
+  /* cards list */
+  .item { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--line); }
+  .item:first-child { border-top: 0; } .item .t { flex: 1; min-width: 0; } .item .t div { overflow-wrap: anywhere; }
+  .item .meta { color: var(--muted); font-size: .8rem; }
+  .forecast { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; text-align: center; }
+  .forecast div { background: var(--soft); border-radius: 9px; padding: 8px 2px; } .forecast b { display: block; font-size: 1.2rem; } .forecast span { color: var(--muted); font-size: .75rem; }
+  /* timer */
+  .clock { font-size: 4rem; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; margin: 8px 0; }
+  .phase { text-align: center; color: var(--muted); }
+  /* guide */
+  .tech h3 { margin: 0 0 6px; font-size: 1.1rem; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .tech p { margin: 6px 0; } .tech .ref { color: var(--muted); font-size: .85rem; }
+  .ev-high { background: #d3f9d8; color: #1e6b2e; } .ev-mod { background: #fff0d1; color: #8a5200; } .ev-low { background: #ffe0e0; color: #9c1f1f; }
+  @media (prefers-color-scheme: dark) { .ev-high { background: #1f3d27; color: #8ce99a; } .ev-mod { background: #44361a; color: #ffd08a; } .ev-low { background: #4a2323; color: #ffa8a8; } }
+  .toast { position: fixed; bottom: max(20px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 18px; border-radius: 10px; opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 30; max-width: 90vw; text-align: center; }
+  .toast.show { opacity: 1; }
+  .empty { text-align: center; color: var(--muted); padding: 30px 10px; }
+  .empty h2 { color: var(--ink); }
+  .overlay { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 20; }
+  .overlay[hidden] { display: none; }
+</style>
+</head>
+<body>
+<div id="login" class="overlay" hidden>
+  <form class="card" id="loginForm" style="max-width:380px;width:100%">
+    <h2>🧠 Recall</h2>
+    <p class="sub">Enter your app password to sync your cards across devices and use the AI tutor.</p>
+    <label for="pw">Password</label>
+    <input id="pw" type="password" autocomplete="current-password" required>
+    <p class="hint" id="loginErr" style="color:var(--bad);min-height:1.2em"></p>
+    <button class="btn primary" style="width:100%" id="loginBtn">Unlock</button>
+  </form>
+</div>
+
+<header>
+  <div class="brand"><h1>🧠 Recall</h1><button class="sync" id="syncBtn" title="Sync status"><i>●</i> <span>Local</span></button></div>
+  <nav role="tablist" id="nav">
+    <button role="tab" data-tab="study" aria-selected="true">Study</button>
+    <button role="tab" data-tab="tutor" aria-selected="false">AI Tutor</button>
+    <button role="tab" data-tab="cards" aria-selected="false">Cards</button>
+    <button role="tab" data-tab="focus" aria-selected="false">Focus</button>
+    <button role="tab" data-tab="stats" aria-selected="false">Progress</button>
+    <button role="tab" data-tab="guide" aria-selected="false">Science</button>
+  </nav>
+</header>
+
+<main>
+<!-- STUDY -->
+<section id="study" class="panel active">
+  <h2>Today's review</h2>
+  <p class="sub">Cards come back just before you'd forget them. Struggling a bit is the point.</p>
+  <div id="studyHome"></div>
+  <div id="studySession" style="display:none"></div>
+</section>
+
+<!-- AI TUTOR -->
+<section id="tutor" class="panel">
+  <h2>AI tutor</h2>
+  <p class="sub">Powered by Gemini. Use it to understand, then do the remembering yourself.</p>
+  <div id="aiOff" class="card empty" hidden>The AI tutor works on the hosted version of this app (deployed to Vercel with a Gemini API key). See the README.</div>
+  <div id="aiOn">
+    <div class="seg" role="group" aria-label="Tutor mode">
+      <button data-mode="make" aria-pressed="true">Make cards</button>
+      <button data-mode="quiz" aria-pressed="false">Quiz me</button>
+      <button data-mode="ask" aria-pressed="false">Ask</button>
+    </div>
+
+    <div class="tmode" id="m-make">
+      <div class="card">
+        <label for="genSrc">Paste your notes or a textbook passage, or just name a topic</label>
+        <textarea id="genSrc" dir="auto" rows="6" placeholder="e.g. paste a page of lecture notes, or type: The causes of World War I"></textarea>
+        <div class="row" style="margin-top:10px">
+          <div class="grow"><label for="genDeck">Deck</label><input id="genDeck" list="deckList" placeholder="e.g. History"></div>
+          <div><label for="genN">How many</label><select id="genN" style="width:auto"><option>5</option><option selected>10</option><option>15</option><option>20</option></select></div>
+        </div>
+        <div class="row" style="margin-top:12px"><button class="btn primary" id="genBtn">Generate cards</button><span class="hint" id="genStatus" style="margin:0"></span></div>
+        <p class="hint">Tip: cards you write yourself stick better (the generation effect). Use AI cards as a starting point and edit them in your own words.</p>
+      </div>
+      <div id="genOut"></div>
+    </div>
+
+    <div class="tmode" id="m-quiz" hidden>
+      <div class="card" id="quizSetup">
+        <label for="quizDeck">What should I quiz you on?</label>
+        <select id="quizDeck"></select>
+        <div class="row" style="margin-top:12px"><button class="btn primary" id="quizStart">Start quiz (5 questions)</button><span class="hint" id="quizStatus" style="margin:0"></span></div>
+        <p class="hint">Gemini asks deeper questions about cards you've already studied: why, how, apply it, compare. Explaining in your own words is one of the strongest ways to make knowledge stick.</p>
+      </div>
+      <div id="quizBox"></div>
+    </div>
+
+    <div class="tmode" id="m-ask" hidden>
+      <div class="card">
+        <div id="chat" class="chat"><div class="empty" style="padding:10px">Ask anything, e.g. <em>"Explain osmosis like I'm 12"</em> or <em>"What's the difference between mitosis and meiosis?"</em></div></div>
+        <div class="row" style="margin-top:12px;align-items:flex-end">
+          <textarea id="askIn" class="grow" dir="auto" rows="2" placeholder="Type your question…"></textarea>
+          <button class="btn primary" id="askBtn">Send</button>
+        </div>
+        <div class="row" style="margin-top:8px"><button class="btn small" id="askClear">New chat</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CARDS -->
+<section id="cards" class="panel">
+  <h2>Cards</h2>
+  <p class="sub">Write questions, not facts. One idea per card, in your own words.</p>
+  <div class="card">
+    <div><label for="newDeck">Deck</label><input id="newDeck" list="deckList" placeholder="e.g. Biology"><datalist id="deckList"></datalist></div>
+    <div style="margin-top:10px"><label for="newQ">Question / prompt</label><textarea id="newQ" dir="auto" rows="2" placeholder="Why does spacing out study sessions improve long-term memory?"></textarea></div>
+    <div style="margin-top:10px"><label for="newA">Answer</label><textarea id="newA" dir="auto" rows="2"></textarea></div>
+    <div class="row" style="margin-top:12px"><button class="btn primary" id="addCard">Add card</button></div>
+  </div>
+  <div class="card">
+    <label for="bulk">Bulk add: one card per line, <code>question :: answer</code> (goes into the deck above)</label>
+    <textarea id="bulk" dir="auto" placeholder="Capital of Australia :: Canberra&#10;Powerhouse of the cell :: Mitochondria"></textarea>
+    <div class="row" style="margin-top:12px"><button class="btn" id="addBulk">Add all</button></div>
+  </div>
+  <div class="card">
+    <div class="row"><strong class="grow" id="listTitle">All cards</strong>
+      <select id="filterDeck" style="width:auto;max-width:50%"></select>
+    </div>
+    <div id="cardList" style="margin-top:8px"></div>
+  </div>
+  <div class="card">
+    <strong>Sync &amp; backup</strong>
+    <p class="hint" id="acctInfo" style="margin-top:4px"></p>
+    <div class="row" style="margin-top:10px">
+      <button class="btn small" id="syncNow">Sync now</button>
+      <button class="btn small" id="exportBtn">Export backup</button>
+      <button class="btn small" id="importBtn">Import backup</button>
+      <button class="btn small danger" id="logoutBtn">Sign out of this device</button>
+      <input type="file" id="importFile" accept="application/json" hidden>
+    </div>
+  </div>
+</section>
+
+<!-- FOCUS -->
+<section id="focus" class="panel">
+  <h2>Focus timer</h2>
+  <p class="sub">Short, undistracted blocks with real breaks. Put your phone in another room (or keep it on this screen).</p>
+  <div class="card">
+    <div class="phase" id="phase">Focus</div>
+    <div class="clock" id="clock">25:00</div>
+    <div class="row" style="justify-content:center">
+      <button class="btn primary" id="tStart">Start</button>
+      <button class="btn" id="tReset">Reset</button>
+    </div>
+    <div class="row" style="justify-content:center;margin-top:16px">
+      <div><label for="focusMin">Focus (min)</label><input id="focusMin" type="number" min="5" max="90" value="25" style="width:90px"></div>
+      <div><label for="breakMin">Break (min)</label><input id="breakMin" type="number" min="1" max="30" value="5" style="width:90px"></div>
+    </div>
+    <p class="hint" style="text-align:center" id="tCount"></p>
+  </div>
+  <div class="card">
+    <strong>Before you start a block</strong>
+    <ol style="margin:8px 0 0 18px;padding:0">
+      <li>Write down what you'll recall or practice (not just "read chapter 3").</li>
+      <li>Close the book, then write what you remember. Check, then fill gaps.</li>
+      <li>Use the break to move, not to scroll.</li>
+    </ol>
+  </div>
+</section>
+
+<!-- STATS -->
+<section id="stats" class="panel">
+  <h2>Progress</h2>
+  <p class="sub">What matters is how much stays in memory, not how long you studied.</p>
+  <div class="stats" id="statTiles"></div>
+  <div class="card"><strong>Next 7 days</strong><div class="forecast" id="forecast" style="margin-top:10px"></div></div>
+  <div class="card"><strong>By deck</strong><div id="deckStats" style="margin-top:8px"></div></div>
+</section>
+
+<!-- GUIDE -->
+<section id="guide" class="panel">
+  <h2>The science of learning</h2>
+  <p class="sub">What the research says works, ranked by strength of evidence, and how this app applies it.</p>
+  <div id="guideList"></div>
+</section>
+</main>
+<div class="toast" id="toast" role="status"></div>
+
+<script src="merge.js"></script>
+<script>
+'use strict';
+const { merge, emptyState } = window.RecallMerge;
+
+/* ---------- basics ---------- */
+const KEY = 'recall.v1', PW_KEY = 'recall.pw';
+const NEW_PER_DAY = 20;
+const DAY = 86400000;
+const HOSTED = location.protocol.startsWith('http');
+const today = () => { const d = new Date(); return Math.floor((d.getTime() - d.getTimezoneOffset() * 60000) / DAY); };
+const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const $ = id => document.getElementById(id);
+const getPw = () => localStorage.getItem(PW_KEY) || '';
+const aiOn = () => HOSTED && !!getPw();
+
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+
+// Minimal, safe markdown for AI replies.
+function md(s) {
+  const inline = t => esc(t).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<i>$2</i>');
+  let html = '', list = null;
+  const close = () => { if (list) { html += `</${list}>`; list = null; } };
+  for (const line of String(s).replace(/\r/g, '').split('\n')) {
+    let m;
+    if ((m = line.match(/^\s*[-*•]\s+(.*)/))) { if (list !== 'ul') { close(); html += '<ul>'; list = 'ul'; } html += `<li>${inline(m[1])}</li>`; }
+    else if ((m = line.match(/^\s*\d+[.)]\s+(.*)/))) { if (list !== 'ol') { close(); html += '<ol>'; list = 'ol'; } html += `<li>${inline(m[1])}</li>`; }
+    else if ((m = line.match(/^#{1,6}\s+(.*)/))) { close(); html += `<p><b>${inline(m[1])}</b></p>`; }
+    else if (!line.trim()) close();
+    else { close(); html += `<p>${inline(line)}</p>`; }
+  }
+  close();
+  return html;
+}
+
+/* ---------- state ---------- */
+const SEED = [
+  ['Learning to learn', 'What is the "testing effect"?', 'Trying to recall information from memory strengthens it more than re-reading it does (Roediger & Karpicke, 2006).'],
+  ['Learning to learn', 'Why does spacing reviews apart beat cramming for long-term retention?', 'Each retrieval after some forgetting forces effortful reconstruction, which strengthens the memory and slows later forgetting.'],
+  ['Learning to learn', 'What is interleaving?', 'Mixing different topics or problem types in one session instead of blocking one type at a time. It feels harder but improves discrimination and retention.'],
+  ['Learning to learn', 'What are "desirable difficulties"?', 'Conditions that make learning feel harder in the short term (spacing, testing, interleaving) but improve long-term retention (Bjork).'],
+  ['Learning to learn', 'Why is re-reading and highlighting a poor main strategy?', 'It creates familiarity, which feels like knowing (an illusion of competence) but does little for later recall (Dunlosky et al., 2013).'],
+  ['Learning to learn', 'How long should the gap be between reviews?', 'Roughly 10–20% of the time until you need to remember it: a test in a month → review about every 3–6 days (Cepeda et al., 2008).'],
+  ['Learning to learn', 'What is self-explanation and why use it?', 'Explaining to yourself how and why each step or fact follows. It links new info to prior knowledge and exposes gaps (Chi et al., 1994).'],
+  ['Learning to learn', 'What should you do the night before an exam?', 'Review lightly, then sleep. Sleep consolidates memories; all-nighters undermine encoding and recall.'],
+];
+function newCard(deck, q, a) {
+  const t = today(), now = Date.now();
+  return { id: uid(), deck: deck || 'General', q, a, ease: 2.5, interval: 0, reps: 0, lapses: 0, due: t, created: t, seen: false, ct: now, upd: now };
+}
+function seedState() {
+  const s = emptyState(), t = today();
+  // Fixed ids + upd 0 so the starter cards never duplicate when a new device syncs.
+  s.cards = SEED.map(([deck, q, a], i) => ({ id: 'seed-' + (i + 1), deck, q, a, ease: 2.5, interval: 0, reps: 0, lapses: 0, due: t, created: t, seen: false, ct: i, upd: 0 }));
+  return s;
+}
+// Accepts current data or the older single-file format.
+function migrate(s) {
+  if (!s || !Array.isArray(s.cards)) return null;
+  if (s.v !== 2) {
+    const now = Date.now();
+    s.cards.forEach((c, i) => { c.ct = c.ct ?? (c.created || 0) * DAY + i; c.upd = c.upd ?? now; });
+    s.days = [...new Set((s.log || []).map(l => l.day))];
+    s.del = {};
+  }
+  return merge(s, null);
+}
+function load() {
+  try { const s = migrate(JSON.parse(localStorage.getItem(KEY))); if (s) return s; } catch (e) {}
+  return seedState();
+}
+let S = load();
+function save() {
+  localStorage.setItem(KEY, JSON.stringify(S));
+  clearTimeout(save.h);
+  save.h = setTimeout(sync, 1200);
+}
+
+/* ---------- server ---------- */
+async function api(path, body) {
+  const r = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-App-Password': encodeURIComponent(getPw()) },
+    body: JSON.stringify(body),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    if (r.status === 401) logout('Wrong password. Please sign in again.', false);
+    throw Object.assign(new Error(j.error || `Server error ${r.status}`), { status: r.status });
+  }
+  return j;
+}
+async function askAI(system, messages, schema) {
+  const { text } = await api('/api/ai', { system, messages, schema });
+  return schema ? JSON.parse(text) : text;
+}
+
+function setSync(state, msg) {
+  const b = $('syncBtn');
+  b.className = 'sync ' + state;
+  b.querySelector('span').textContent = { local: 'Local only', ok: 'Synced', busy: 'Syncing…', off: navigator.onLine ? 'Sync error' : 'Offline' }[state];
+  b.title = msg || '';
+  const info = $('acctInfo');
+  if (info) info.textContent = !HOSTED ? 'This copy runs from a file, so data stays in this browser only. Use the hosted site to sync.'
+    : state === 'off' ? `Not synced: ${msg || 'offline'}. Your changes are saved on this device and will sync when possible.`
+    : 'Signed in. Your cards sync automatically between all your devices.';
+}
+
+let syncing = null, syncAgain = false;
+function sync() {
+  if (!HOSTED || !getPw()) return Promise.resolve({ ok: false });
+  if (syncing) { syncAgain = true; return syncing; }
+  setSync('busy');
+  syncing = (async () => {
+    try {
+      const before = JSON.stringify(S);
+      const remote = await api('/api/sync', S);
+      S = merge(S, remote);  // also keeps anything changed while the request was in flight
+      localStorage.setItem(KEY, JSON.stringify(S));
+      setSync('ok');
+      if (JSON.stringify(S) !== before) rerender();
+      return { ok: true };
+    } catch (e) {
+      setSync('off', e.message);
+      return { ok: false, status: e.status, error: e.message };
+    } finally {
+      syncing = null;
+      if (syncAgain) { syncAgain = false; setTimeout(sync, 0); }
+    }
+  })();
+  return syncing;
+}
+
+function rerender() {
+  refreshDecks();
+  const tab = document.querySelector('.panel.active').id;
+  if (tab === 'study' && !sess) renderStudyHome();
+  if (tab === 'cards') renderCards();
+  if (tab === 'stats') renderStats();
+  tRender();
+}
+
+/* ---------- login ---------- */
+function showLogin(msg) { $('login').hidden = false; $('loginErr').textContent = msg || ''; setTimeout(() => $('pw').focus(), 50); }
+function logout(msg, wipe) {
+  localStorage.removeItem(PW_KEY);
+  if (wipe) { localStorage.removeItem(KEY); S = seedState(); rerender(); }
+  if (HOSTED) showLogin(msg);
+  setSync('local');
+}
+$('loginForm').onsubmit = async e => {
+  e.preventDefault();
+  localStorage.setItem(PW_KEY, $('pw').value);
+  $('loginBtn').disabled = true; $('loginErr').textContent = '';
+  const r = await sync();
+  $('loginBtn').disabled = false;
+  if (r.status === 401) { localStorage.removeItem(PW_KEY); $('loginErr').textContent = 'Wrong password.'; return; }
+  $('login').hidden = true; $('pw').value = '';
+  if (!r.ok) toast(r.error ? 'Signed in, but sync failed: ' + r.error : 'Signed in (offline)');
+  else toast('Signed in and synced');
+  updateTutorVisibility();
+};
+$('syncBtn').onclick = () => HOSTED && (getPw() ? sync() : showLogin());
+$('syncNow').onclick = () => HOSTED ? sync().then(r => toast(r.ok ? 'Synced' : 'Sync failed: ' + (r.error || 'not signed in'))) : toast('Sync needs the hosted version');
+$('logoutBtn').onclick = () => {
+  if (!HOSTED) return toast('Nothing to sign out of in the local file version');
+  if (confirm('Sign out and remove your cards from this device? (They stay safe in the cloud.)')) logout('', true);
+};
+
+/* ---------- scheduling (SM-2 style) ---------- */
+// rating: 1 again, 2 hard, 3 good, 4 easy
+function schedule(c, r) {
+  let { ease, interval, reps, lapses } = c;
+  if (r === 1) { lapses++; reps = 0; interval = 1; ease = Math.max(1.3, ease - 0.2); }
+  else {
+    if (r === 2) { ease = Math.max(1.3, ease - 0.15); interval = reps === 0 ? 1 : Math.max(interval + 1, Math.round(interval * 1.2)); }
+    else if (r === 3) { interval = reps === 0 ? 1 : reps === 1 ? 3 : Math.round(interval * ease); }
+    else { ease += 0.15; interval = reps === 0 ? 4 : reps === 1 ? 7 : Math.round(interval * ease * 1.3); }
+    reps++;
+  }
+  return { ease, interval: Math.max(1, interval), reps, lapses };
+}
+function fmtDays(d) {
+  if (d < 1) return 'today'; if (d < 14) return d + 'd'; if (d < 60) return Math.round(d / 7) + 'w';
+  if (d < 365) return (d / 30).toFixed(d < 120 ? 1 : 0).replace('.0', '') + 'mo'; return (d / 365).toFixed(1) + 'y';
+}
+
+/* ---------- tabs ---------- */
+document.querySelectorAll('#nav button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+function showTab(name) {
+  document.querySelectorAll('#nav button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === name));
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === name));
+  if (name === 'study' && !sess) renderStudyHome();
+  if (name === 'cards') renderCards();
+  if (name === 'stats') renderStats();
+  if (name === 'tutor') { updateTutorVisibility(); refreshQuizDecks(); }
+  window.scrollTo(0, 0);
+}
+
+/* ---------- study ---------- */
+let sess = null;
+const decks = () => [...new Set(S.cards.map(c => c.deck))].sort();
+const newToday = () => { const t = today(); return S.log.filter(l => l.day === t && l.first).length; };
+const cardById = id => S.cards.find(c => c.id === id);
+
+function dueCards(deck) {
+  const t = today();
+  const pool = S.cards.filter(c => !deck || c.deck === deck);
+  const review = pool.filter(c => c.seen && c.due <= t);
+  const room = Math.max(0, NEW_PER_DAY - newToday());
+  const fresh = pool.filter(c => !c.seen).slice(0, room);
+  return { review, fresh };
+}
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+const deckOptions = first => [`<option value="">${first}</option>`].concat(decks().map(d => `<option value="${esc(d)}">${esc(d)}</option>`)).join('');
+
+function renderStudyHome() {
+  $('studySession').style.display = 'none'; $('studyHome').style.display = '';
+  const { review, fresh } = dueCards();
+  const total = review.length + fresh.length;
+  if (!S.cards.length) { $('studyHome').innerHTML = '<div class="card empty">No cards yet. Add some in the Cards tab, or let the AI Tutor make some from your notes.</div>'; return; }
+  $('studyHome').innerHTML = `
+    <div class="stats">
+      <div class="stat"><b>${review.length}</b><span>due for review</span></div>
+      <div class="stat"><b>${fresh.length}</b><span>new today (max ${NEW_PER_DAY})</span></div>
+      <div class="stat"><b>${streak()}</b><span>day streak</span></div>
+    </div>
+    <div class="card">
+      <label for="deckPick">Deck</label>
+      <select id="deckPick">${deckOptions('All decks (interleaved)')}</select>
+      <div class="row" style="margin-top:14px">
+        <button class="btn primary" id="startBtn" ${total ? '' : 'disabled'}>${total ? `Start session (${total})` : 'All caught up 🎉'}</button>
+      </div>
+      <p class="hint">Mixing decks (interleaving) feels harder than one topic at a time, but it improves long-term retention.${total ? '' : ' Want more? Try <b>AI Tutor → Quiz me</b> on what you already know.'}</p>
+    </div>
+    <div class="card"><strong>How a session works</strong>
+      <ol style="margin:8px 0 0 18px;padding:0">
+        <li>Read the question and <em>try to answer from memory</em>, ideally typing it.</li>
+        <li>Reveal the answer and compare honestly. Stuck? Tap <b>Explain</b> for an AI explanation.</li>
+        <li>Rate how it went. Harder recall → sooner repeat.</li>
+      </ol></div>`;
+  $('startBtn').onclick = () => startSession($('deckPick').value);
+}
+
+function startSession(deck) {
+  const { review, fresh } = dueCards(deck || '');
+  const queue = shuffle([...review, ...fresh].map(c => c.id));
+  if (!queue.length) return;
+  sess = { queue, total: queue.length, done: 0, revealed: false, counts: [0, 0, 0, 0], retry: new Set() };
+  $('studyHome').style.display = 'none'; $('studySession').style.display = '';
+  renderCard();
+}
+
+function renderCard() {
+  const el = $('studySession');
+  while (sess.queue.length && !cardById(sess.queue[0])) sess.queue.shift(); // deleted on another device
+  if (!sess.queue.length) return finishSession();
+  const c = cardById(sess.queue[0]);
+  sess.revealed = false;
+  el.innerHTML = `
+    <div class="progress"><i style="width:${Math.round(sess.done / sess.total * 100)}%"></i></div>
+    <div class="card">
+      <div class="row"><span class="pill">${esc(c.deck)}</span><span class="grow"></span><span class="hint" style="margin:0">${sess.queue.length} left</span></div>
+      <div class="prompt" dir="auto" style="margin-top:14px">${esc(c.q)}</div>
+      <div id="recallBox" style="margin-top:12px">
+        <label for="mine">Type what you remember <em>(optional but effective)</em></label>
+        <textarea id="mine" dir="auto" rows="3" placeholder="Retrieve first. Don't peek."></textarea>
+      </div>
+      <div id="reveal"></div>
+      <div class="row" style="margin-top:14px"><button class="btn primary" id="showBtn">Show answer</button><button class="btn" id="endBtn">End session</button></div>
+    </div>`;
+  $('showBtn').onclick = reveal; $('endBtn').onclick = finishSession;
+  $('mine').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); reveal(); } });
+  if (matchMedia('(pointer: fine)').matches) $('mine').focus(); // don't pop the keyboard on phones
+}
+
+function reveal() {
+  if (!sess || sess.revealed) return;
+  sess.revealed = true;
+  const c = cardById(sess.queue[0]);
+  const mine = $('mine').value.trim();
+  $('recallBox').style.display = 'none';
+  const retry = sess.retry.has(c.id);
+  const lbl = r => retry ? '' : `<small>${fmtDays(schedule(c, r).interval)}</small>`;
+  $('reveal').innerHTML = `
+    ${mine ? `<div class="mine" dir="auto"><small>Your answer</small>${esc(mine)}</div>` : ''}
+    <div class="answer" dir="auto"><span class="tag">Answer</span>${esc(c.a)}</div>
+    ${aiOn() ? '<div style="margin-top:10px"><button class="btn small" id="explainBtn">🤖 Explain this</button></div><div id="explainBox"></div>' : ''}
+    <div class="rate">
+      <button class="r1" data-r="1">Again${lbl(1)}</button>
+      <button class="r2" data-r="2">Hard${lbl(2)}</button>
+      <button class="r3" data-r="3">Good${lbl(3)}</button>
+      <button class="r4" data-r="4">Easy${lbl(4)}</button>
+    </div>
+    <p class="hint">Be honest: <b>Again</b> = blank or wrong, <b>Hard</b> = right but slow or shaky, <b>Good</b> = right with effort, <b>Easy</b> = instant.</p>`;
+  $('showBtn').style.display = 'none';
+  document.querySelectorAll('.rate button').forEach(b => b.onclick = () => rate(+b.dataset.r));
+  if (aiOn()) $('explainBtn').onclick = () => explainCard(c, mine);
+}
+
+async function explainCard(c, mine) {
+  const id = c.id, btn = $('explainBtn');
+  btn.disabled = true; $('explainBox').innerHTML = '<div class="ai"><span class="spin"></span>Thinking…</div>';
+  try {
+    const text = await askAI(TUTOR_SYS, [{ role: 'user', text:
+      `I'm studying this flashcard.\nQuestion: ${c.q}\nAnswer: ${c.a}\n${mine ? `My attempt was: ${mine}\n` : ''}` +
+      `Help me understand WHY this is the answer so it makes sense and sticks. Use a simple example or analogy. ${mine ? 'If my attempt was wrong or incomplete, tell me exactly what I missed. ' : ''}Keep it under 150 words.` }]);
+    if (sess && sess.queue[0] === id && $('explainBox')) $('explainBox').innerHTML = `<div class="ai" dir="auto">${md(text)}</div>`;
+  } catch (e) {
+    if ($('explainBox')) $('explainBox').innerHTML = `<div class="ai">⚠️ ${esc(e.message)}</div>`;
+  }
+  if ($('explainBtn')) $('explainBtn').disabled = false;
+}
+
+function rate(r) {
+  if (!sess || !sess.revealed) return;
+  const id = sess.queue.shift();
+  const c = cardById(id);
+  const t = today();
+  if (c) {
+    const retry = sess.retry.has(id);
+    S.log.push({ t: Date.now(), day: t, id, r, first: !c.seen, retry });
+    if (!S.days.includes(t)) S.days.push(t);
+    if (!retry) {
+      Object.assign(c, schedule(c, r), { seen: true, upd: Date.now() });
+      c.due = t + c.interval;
+      sess.counts[r - 1]++;
+    }
+    if (r === 1) { sess.retry.add(id); sess.queue.splice(Math.min(3, sess.queue.length), 0, id); }
+    else { sess.done++; sess.retry.delete(id); }
+  }
+  save(); renderCard();
+}
+
+function finishSession() {
+  const el = $('studySession'); const n = sess.counts.reduce((a, b) => a + b, 0);
+  const good = sess.counts[2] + sess.counts[3];
+  el.innerHTML = `<div class="card empty"><div style="font-size:2.2rem">✅</div><h2>Session complete</h2>
+    <p>${n} card${n === 1 ? '' : 's'} reviewed${n ? ` · ${Math.round(good / n * 100)}% recalled well` : ''}.</p>
+    <p class="hint">Come back tomorrow. Spacing only works if you actually return. Sleep also helps consolidate what you just practiced.</p>
+    <div class="row" style="justify-content:center"><button class="btn primary" id="doneBtn">Back</button>${aiOn() && n ? '<button class="btn" id="quizAfter">🤖 Quiz me deeper</button>' : ''}</div></div>`;
+  $('doneBtn').onclick = () => { sess = null; renderStudyHome(); };
+  if ($('quizAfter')) $('quizAfter').onclick = () => { sess = null; renderStudyHome(); showTab('tutor'); setMode('quiz'); };
+}
+
+document.addEventListener('keydown', e => {
+  if (!sess || !$('study').classList.contains('active')) return;
+  const typing = e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT';
+  if (!sess.revealed && e.code === 'Space' && !typing) { e.preventDefault(); reveal(); }
+  else if (sess.revealed && '1234'.includes(e.key) && e.key && !typing) rate(+e.key);
+  else if (sess.revealed && e.code === 'Space' && !typing) e.preventDefault();
+});
+
+function streak() {
+  const days = new Set(S.days); let t = today(), n = 0;
+  if (!days.has(t)) t--;
+  while (days.has(t)) { n++; t--; }
+  return n;
+}
+
+/* ---------- AI tutor ---------- */
+const TUTOR_SYS = 'You are a patient, encouraging tutor grounded in learning science. Explain clearly and simply: start with the core idea in one or two sentences, then give an analogy or concrete example, then the key details. Be accurate; if something is uncertain or debated, say so. Keep answers concise (under about 200 words unless asked for more), using short paragraphs or bullet points. When it fits, end with one short question that makes the learner recall or apply what you explained. Always reply in the language the learner writes in.';
+const CARDS_SYS = 'You write high-quality flashcards for spaced-repetition study, following evidence-based principles: one atomic idea per card; prompts that require real recall (prefer why/how/what-happens-if questions over yes/no or bare definitions); short, precise answers (ideally under 25 words); every prompt has one clearly correct answer and includes enough context to stand alone; no trivia that is not in the material. If the input is a topic rather than notes, cover its most important core concepts accurately. Write the cards in the same language as the input.';
+const QUIZ_SYS = 'You are a tutor who checks deep understanding. Based only on the material the learner has studied, write open-ended questions that make them explain, apply, compare, or give an example, rather than repeating a card word for word. Mix easier and harder questions. Each question is one or two sentences. Use the same language as the material.';
+const GRADE_SYS = 'You are a supportive but honest tutor grading a short answer. Judge whether the learner shows correct understanding, using the material and well-established knowledge. verdict must be "correct", "partial" or "incorrect". feedback: 2 to 4 sentences covering what was right, what was missing or wrong, and one tip to remember it. ideal: a concise model answer (under 50 words). Reply in the language of the question.';
+
+function updateTutorVisibility() { $('aiOff').hidden = aiOn(); $('aiOn').hidden = !aiOn(); }
+document.querySelectorAll('.seg button').forEach(b => b.onclick = () => setMode(b.dataset.mode));
+function setMode(m) {
+  document.querySelectorAll('.seg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === m));
+  document.querySelectorAll('.tmode').forEach(el => el.hidden = el.id !== 'm-' + m);
+  if (m === 'quiz') refreshQuizDecks();
+}
+const busy = (el, on, text) => { el.innerHTML = on ? `<span class="spin"></span>${esc(text || 'Thinking…')}` : esc(text || ''); };
+
+// Make cards
+let genCards = [];
+$('genBtn').onclick = async () => {
+  const src = $('genSrc').value.trim(), n = +$('genN').value;
+  if (!src) return toast('Paste some notes or type a topic first');
+  $('genBtn').disabled = true; busy($('genStatus'), true, 'Writing cards…');
+  try {
+    const out = await askAI(CARDS_SYS, [{ role: 'user', text: `Create ${n} flashcards from the following:\n\n${src}` }],
+      { type: 'OBJECT', properties: { cards: { type: 'ARRAY', items: { type: 'OBJECT', properties: { q: { type: 'STRING' }, a: { type: 'STRING' } }, required: ['q', 'a'] } } }, required: ['cards'] });
+    genCards = (out.cards || []).filter(c => c.q && c.a);
+    busy($('genStatus'), false, genCards.length ? '' : 'No cards came back. Try different text.');
+    renderGen();
+  } catch (e) { busy($('genStatus'), false, '⚠️ ' + e.message); }
+  $('genBtn').disabled = false;
+};
+function renderGen() {
+  if (!genCards.length) { $('genOut').innerHTML = ''; return; }
+  $('genOut').innerHTML = `<div class="card"><div class="row"><strong class="grow">Review before adding</strong></div>
+    <p class="hint" style="margin-top:2px">Edit anything into your own words. Untick cards you don't want.</p>
+    ${genCards.map((c, i) => `<div class="gen"><input type="checkbox" checked data-i="${i}" aria-label="Keep card ${i + 1}">
+      <div class="grow"><textarea dir="auto" rows="2" data-q="${i}" aria-label="Question ${i + 1}">${esc(c.q)}</textarea><textarea dir="auto" rows="2" data-a="${i}" aria-label="Answer ${i + 1}">${esc(c.a)}</textarea></div></div>`).join('')}
+    <div class="row" style="margin-top:12px"><button class="btn primary" id="genAdd">Add selected cards</button><button class="btn" id="genDiscard">Discard</button></div></div>`;
+  $('genAdd').onclick = () => {
+    const deck = $('genDeck').value.trim() || 'General'; let n = 0;
+    document.querySelectorAll('#genOut input[type=checkbox]').forEach(cb => {
+      if (!cb.checked) return;
+      const i = cb.dataset.i, q = document.querySelector(`[data-q="${i}"]`).value.trim(), a = document.querySelector(`[data-a="${i}"]`).value.trim();
+      if (q && a) { S.cards.push(newCard(deck, q, a)); n++; }
+    });
+    if (!n) return toast('No cards selected');
+    save(); genCards = []; renderGen(); $('genSrc').value = ''; refreshDecks();
+    toast(`${n} card${n === 1 ? '' : 's'} added to "${deck}". They're in today's Study session.`);
+  };
+  $('genDiscard').onclick = () => { genCards = []; renderGen(); };
+}
+
+// Quiz me
+let quiz = null;
+function refreshQuizDecks() {
+  const cur = $('quizDeck').value;
+  $('quizDeck').innerHTML = deckOptions('Recently studied (all decks)');
+  $('quizDeck').value = decks().includes(cur) ? cur : '';
+}
+$('quizStart').onclick = async () => {
+  const deck = $('quizDeck').value;
+  const last = {}; S.log.forEach(l => { last[l.id] = Math.max(last[l.id] || 0, l.t); });
+  let pool = S.cards.filter(c => c.seen && (!deck || c.deck === deck));
+  if (!pool.length) return busy($('quizStatus'), false, deck ? 'Study some cards in this deck first.' : 'Study some cards first, then I can quiz you on them.');
+  pool = pool.sort((a, b) => (last[b.id] || 0) - (last[a.id] || 0)).slice(0, 15);
+  const material = pool.map(c => `Q: ${c.q}\nA: ${c.a}`).join('\n\n');
+  $('quizStart').disabled = true; busy($('quizStatus'), true, 'Writing questions…');
+  try {
+    const out = await askAI(QUIZ_SYS, [{ role: 'user', text: `Material I have studied:\n\n${material}\n\nWrite 5 questions.` }],
+      { type: 'OBJECT', properties: { questions: { type: 'ARRAY', items: { type: 'STRING' } } }, required: ['questions'] });
+    const qs = (out.questions || []).filter(Boolean).slice(0, 5);
+    if (!qs.length) throw new Error('No questions came back. Try again.');
+    quiz = { qs, i: 0, score: [], deck: deck || 'Quiz review', material };
+    busy($('quizStatus'), false, ''); $('quizSetup').hidden = true;
+    renderQuizQ();
+  } catch (e) { busy($('quizStatus'), false, '⚠️ ' + e.message); }
+  $('quizStart').disabled = false;
+};
+function renderQuizQ() {
+  const q = quiz.qs[quiz.i];
+  $('quizBox').innerHTML = `<div class="card">
+    <div class="progress"><i style="width:${Math.round(quiz.i / quiz.qs.length * 100)}%"></i></div>
+    <span class="pill">Question ${quiz.i + 1} of ${quiz.qs.length}</span>
+    <div class="prompt" dir="auto" style="margin-top:12px;font-size:1.15rem">${esc(q)}</div>
+    <div id="quizAnsBox" style="margin-top:12px"><label for="quizAns">Your answer, in your own words</label>
+      <textarea id="quizAns" dir="auto" rows="4"></textarea>
+      <div class="row" style="margin-top:12px"><button class="btn primary" id="quizCheck">Check answer</button><button class="btn" id="quizSkip">I don't know</button><button class="btn" id="quizQuit">Stop</button><span class="hint" id="quizWait" style="margin:0"></span></div>
+    </div>
+    <div id="quizFb"></div></div>`;
+  $('quizCheck').onclick = () => { const a = $('quizAns').value.trim(); if (!a) return toast('Write an answer first, even a rough guess'); grade(a); };
+  $('quizSkip').onclick = () => grade("I don't know.");
+  $('quizQuit').onclick = endQuiz;
+}
+async function grade(answer) {
+  const q = quiz.qs[quiz.i];
+  $('quizCheck').disabled = $('quizSkip').disabled = true; busy($('quizWait'), true, 'Checking…');
+  try {
+    const out = await askAI(GRADE_SYS, [{ role: 'user', text: `Material:\n${quiz.material}\n\nQuestion: ${q}\nLearner's answer: ${answer}` }],
+      { type: 'OBJECT', properties: { verdict: { type: 'STRING', enum: ['correct', 'partial', 'incorrect'] }, feedback: { type: 'STRING' }, ideal: { type: 'STRING' } }, required: ['verdict', 'feedback', 'ideal'] });
+    const v = ['correct', 'partial', 'incorrect'].includes(out.verdict) ? out.verdict : 'partial';
+    quiz.score.push(v);
+    $('quizAnsBox').innerHTML = `<div class="mine" dir="auto"><small>Your answer</small>${esc(answer)}</div>`;
+    const last = quiz.i === quiz.qs.length - 1;
+    $('quizFb').innerHTML = `<div class="ai" dir="auto"><span class="pill v-${v}">${{ correct: '✓ Correct', partial: '◐ Partly right', incorrect: '✗ Not quite' }[v]}</span>
+      <div style="margin-top:8px">${md(out.feedback || '')}</div>
+      <p style="margin-top:8px"><b>Model answer:</b> ${esc(out.ideal || '')}</p></div>
+      <div class="row" style="margin-top:12px"><button class="btn primary" id="quizNext">${last ? 'Finish' : 'Next question'}</button>
+      ${v !== 'correct' ? '<button class="btn" id="quizSave">+ Save as a card</button>' : ''}</div>`;
+    $('quizNext').onclick = () => { quiz.i++; quiz.i < quiz.qs.length ? renderQuizQ() : endQuiz(); };
+    if ($('quizSave')) $('quizSave').onclick = () => {
+      S.cards.push(newCard(quiz.deck, q, out.ideal || '')); save();
+      $('quizSave').disabled = true; $('quizSave').textContent = '✓ Saved'; toast(`Saved to "${quiz.deck}"`);
+    };
+  } catch (e) {
+    busy($('quizWait'), false, '⚠️ ' + e.message);
+    $('quizCheck').disabled = $('quizSkip').disabled = false;
+  }
+}
+function endQuiz() {
+  const s = quiz ? quiz.score : [], right = s.filter(v => v === 'correct').length, part = s.filter(v => v === 'partial').length;
+  $('quizBox').innerHTML = s.length ? `<div class="card empty"><div style="font-size:2rem">🎓</div><h2>Quiz done</h2>
+    <p>${right} correct, ${part} partly right, out of ${s.length}.</p>
+    <p class="hint">Anything you missed? Save it as a card, and spaced repetition will bring it back before you forget.</p></div>` : '';
+  quiz = null; $('quizSetup').hidden = false;
+}
+
+// Ask
+let chat = [];
+function renderChat() {
+  $('chat').innerHTML = chat.length ? chat.map((m, i) => m.role === 'user'
+    ? `<div class="msg user" dir="auto">${esc(m.text)}</div>`
+    : `<div class="msg model" dir="auto">${m.pending ? '<span class="spin"></span>Thinking…' : md(m.text)}
+       ${m.pending || m.err ? '' : `<div style="margin-top:6px"><button class="btn small" data-mk="${i}">Make cards from this</button></div>`}</div>`).join('')
+    : '<div class="empty" style="padding:10px">Ask anything, e.g. <em>"Explain osmosis like I\'m 12"</em>.</div>';
+  $('chat').scrollTop = $('chat').scrollHeight;
+  document.querySelectorAll('[data-mk]').forEach(b => b.onclick = () => {
+    const i = +b.dataset.mk;
+    $('genSrc').value = (chat[i - 1] ? 'Topic: ' + chat[i - 1].text + '\n\n' : '') + chat[i].text;
+    setMode('make'); $('genSrc').focus(); toast('Choose a deck, then press Generate');
+  });
+}
+async function sendAsk() {
+  const text = $('askIn').value.trim(); if (!text) return;
+  $('askIn').value = ''; $('askBtn').disabled = true;
+  chat.push({ role: 'user', text }); chat.push({ role: 'model', text: '', pending: true }); renderChat();
+  try {
+    const reply = await askAI(TUTOR_SYS, chat.filter(m => !m.pending && !m.err).slice(-20));
+    chat[chat.length - 1] = { role: 'model', text: reply };
+  } catch (e) { chat[chat.length - 1] = { role: 'model', text: '⚠️ ' + e.message, err: true }; }
+  $('askBtn').disabled = false; renderChat();
+}
+$('askBtn').onclick = sendAsk;
+$('askIn').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sendAsk(); } });
+$('askClear').onclick = () => { chat = []; renderChat(); };
+
+/* ---------- cards ---------- */
+function refreshDecks() {
+  $('deckList').innerHTML = decks().map(d => `<option value="${esc(d)}">`).join('');
+  const cur = $('filterDeck').value;
+  $('filterDeck').innerHTML = deckOptions('All decks');
+  $('filterDeck').value = decks().includes(cur) ? cur : '';
+}
+function renderCards() {
+  refreshDecks();
+  const f = $('filterDeck').value;
+  const list = S.cards.filter(c => !f || c.deck === f);
+  $('listTitle').textContent = `${list.length} card${list.length === 1 ? '' : 's'}`;
+  $('cardList').innerHTML = list.length ? list.slice().reverse().map(c => `
+    <div class="item"><div class="t"><div dir="auto"><b>${esc(c.q)}</b></div><div class="meta" dir="auto">${esc(c.a)}</div>
+    <div class="meta"><span class="pill">${esc(c.deck)}</span> ${c.seen ? 'next review ' + (c.due <= today() ? 'today' : 'in ' + fmtDays(c.due - today())) : 'new'}</div></div>
+    <button class="btn small danger" data-del="${esc(c.id)}" aria-label="Delete card">✕</button></div>`).join('')
+    : '<div class="empty">Nothing here yet.</div>';
+  document.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+    if (!confirm('Delete this card?')) return;
+    S.cards = S.cards.filter(c => c.id !== b.dataset.del); S.del[b.dataset.del] = Date.now(); save(); renderCards();
+  });
+}
+$('filterDeck').onchange = renderCards;
+$('addCard').onclick = () => {
+  const q = $('newQ').value.trim(), a = $('newA').value.trim();
+  if (!q || !a) return toast('Add both a question and an answer');
+  S.cards.push(newCard($('newDeck').value.trim(), q, a)); save();
+  $('newQ').value = ''; $('newA').value = ''; $('newQ').focus(); toast('Card added'); renderCards();
+};
+$('addBulk').onclick = () => {
+  const deck = $('newDeck').value.trim(); let n = 0;
+  $('bulk').value.split('\n').forEach(line => {
+    const i = line.indexOf('::'); if (i < 1) return;
+    const q = line.slice(0, i).trim(), a = line.slice(i + 2).trim();
+    if (q && a) { S.cards.push(newCard(deck, q, a)); n++; }
+  });
+  if (!n) return toast('No "question :: answer" lines found');
+  save(); $('bulk').value = ''; toast(n + ' cards added'); renderCards();
+};
+$('exportBtn').onclick = () => {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' }));
+  const a = document.createElement('a'); a.href = url; a.download = `recall-backup-${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(url);
+};
+$('importBtn').onclick = () => $('importFile').click();
+$('importFile').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    let d;
+    try { d = migrate(JSON.parse(r.result)); } catch (_) {}
+    if (!d) return toast('Not a valid backup file');
+    if (!confirm(`Replace your current cards with the ${d.cards.length} cards in this backup? This also applies to your other devices.`)) return;
+    const now = Date.now(), keep = new Set(d.cards.map(c => c.id)), del = { ...S.del };
+    S.cards.forEach(c => { if (!keep.has(c.id)) del[c.id] = now; });
+    d.cards.forEach(c => { c.upd = now; delete del[c.id]; });
+    S = merge({ ...d, del, days: [...S.days, ...d.days], log: [...S.log, ...d.log], timer: S.timer }, null);
+    save(); rerender(); toast('Backup imported');
+  };
+  r.readAsText(f); e.target.value = '';
+};
+
+/* ---------- stats ---------- */
+function renderStats() {
+  const t = today(), seen = S.cards.filter(c => c.seen);
+  const recent = S.log.filter(l => l.day > t - 30 && !l.retry && !l.first);
+  const ret = recent.length ? Math.round(recent.filter(l => l.r >= 3).length / recent.length * 100) + '%' : '—';
+  const mature = seen.filter(c => c.interval >= 21).length;
+  $('statTiles').innerHTML = [
+    [S.cards.length, 'total cards'], [seen.length, 'learned so far'], [mature, 'mature (21d+ gap)'],
+    [ret, 'recall rate, last 30 days'], [streak(), 'day streak'], [S.log.filter(l => l.day === t).length, 'reviews today'],
+  ].map(([b, s]) => `<div class="stat"><b>${b}</b><span>${s}</span></div>`).join('');
+  const names = ['Today', 'Tmrw'];
+  $('forecast').innerHTML = [0, 1, 2, 3, 4, 5, 6].map(i => {
+    const n = seen.filter(c => i === 0 ? c.due <= t : c.due === t + i).length;
+    const d = new Date(Date.now() + i * DAY);
+    return `<div><b>${n}</b><span>${names[i] || d.toLocaleDateString(undefined, { weekday: 'short' })}</span></div>`;
+  }).join('');
+  $('deckStats').innerHTML = decks().map(d => {
+    const cs = S.cards.filter(c => c.deck === d), l = cs.filter(c => c.seen).length;
+    return `<div class="item"><div class="t"><b>${esc(d)}</b></div><div class="meta">${l}/${cs.length} learned</div></div>`;
+  }).join('') || '<div class="empty">No decks yet.</div>';
+}
+
+/* ---------- focus timer ---------- */
+const T = { running: false, phase: 'focus', left: 25 * 60, end: 0, h: null };
+const fmt = s => String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+function tRender() {
+  $('clock').textContent = fmt(Math.max(0, T.left)); $('phase').textContent = T.phase === 'focus' ? 'Focus' : 'Break';
+  $('tStart').textContent = T.running ? 'Pause' : 'Start';
+  const sessions = S.timer.day === today() ? S.timer.sessions : 0;
+  $('tCount').textContent = `${sessions} focus block${sessions === 1 ? '' : 's'} completed today`;
+  document.title = T.running ? `${fmt(Math.max(0, T.left))} · Recall` : 'Recall — evidence-based study app';
+}
+function tTick() {
+  T.left = Math.round((T.end - Date.now()) / 1000);
+  if (T.left <= 0) {
+    if (T.phase === 'focus') {
+      const t = today();
+      S.timer = { day: t, sessions: (S.timer.day === t ? S.timer.sessions : 0) + 1 }; save();
+    }
+    try { beep(); } catch (_) {}
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    T.phase = T.phase === 'focus' ? 'break' : 'focus';
+    T.left = (T.phase === 'focus' ? +$('focusMin').value : +$('breakMin').value) * 60;
+    T.end = Date.now() + T.left * 1000;
+    toast(T.phase === 'break' ? 'Focus block done. Take a real break.' : 'Break over. Back to it.');
+  }
+  tRender();
+}
+let audio;
+function beep() {
+  audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+  const o = audio.createOscillator(), g = audio.createGain();
+  o.connect(g); g.connect(audio.destination); g.gain.value = 0.1; o.frequency.value = 660; o.start(); o.stop(audio.currentTime + 0.3);
+}
+$('tStart').onclick = () => {
+  try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); audio.resume(); } catch (_) {} // unlock sound on phones
+  if (T.running) { clearInterval(T.h); T.running = false; }
+  else { T.end = Date.now() + T.left * 1000; T.running = true; T.h = setInterval(tTick, 500); }
+  tRender();
+};
+function tResetTimer() { clearInterval(T.h); T.running = false; T.phase = 'focus'; T.left = Math.max(1, +$('focusMin').value || 25) * 60; tRender(); }
+$('tReset').onclick = tResetTimer;
+$('focusMin').onchange = () => { if (!T.running && T.phase === 'focus') tResetTimer(); };
+
+/* ---------- guide ---------- */
+const GUIDE = [
+  { t: 'Retrieval practice (self-testing)', ev: ['high', 'Strong evidence'],
+    d: 'Pulling information out of memory strengthens it far more than putting it in again. In a classic study, students who read a passage once and then tested themselves recalled substantially more a week later than students who re-read it several times, even though the re-readers felt more confident.',
+    how: 'Close the book and write down everything you remember. Use flashcards that ask questions. Do practice problems before you feel ready.',
+    app: 'Every card asks you to recall first; the optional typed answer makes you commit before seeing the solution. The AI quiz asks deeper questions you have to answer yourself.',
+    ref: 'Roediger & Karpicke (2006), Psychological Science · Dunlosky et al. (2013), rated "high utility"' },
+  { t: 'Spaced practice', ev: ['high', 'Strong evidence'],
+    d: 'The same total study time spread over several days produces much longer-lasting memory than one massed session. Forgetting a little between reviews makes the next retrieval effortful, and that effort is what builds durable memory. This counters the Ebbinghaus forgetting curve.',
+    how: 'Review the same material several times across days and weeks. A useful rule: leave a gap of roughly 10–20% of the time until you need to remember it. Test in 1 month → review every few days; test in a year → every few weeks.',
+    app: 'Each card is rescheduled after every review: remembered easily, the gap grows; forgotten, it resets to tomorrow (an SM-2 style algorithm).',
+    ref: 'Ebbinghaus (1885) · Cepeda et al. (2006), Psychological Bulletin · Cepeda et al. (2008), Psychological Science' },
+  { t: 'Interleaving', ev: ['mod', 'Moderate evidence'],
+    d: 'Mixing different topics or problem types in one session, instead of finishing one type before the next, improves your ability to tell problems apart and choose the right method. It feels harder and slower, and people often rate it as less effective while performing better on later tests.',
+    how: 'Alternate subjects or problem types within a session. In maths, shuffle problem types rather than doing 20 of the same.',
+    app: '"All decks" mode shuffles cards from every deck together.',
+    ref: 'Rohrer & Taylor (2007) · Kornell & Bjork (2008), Psychological Science' },
+  { t: 'Elaboration and self-explanation', ev: ['mod', 'Moderate evidence'],
+    d: 'Asking "why does this work?" and explaining how new ideas connect to what you already know builds richer memory traces and reveals gaps you would otherwise miss. Teaching the idea to an imaginary beginner is a practical version (the Feynman technique).',
+    how: 'After each concept, explain it aloud in plain words without notes. Where you stumble is what to study next. Write cards as "why/how" questions, not just definitions.',
+    app: 'The AI quiz asks you to explain and apply ideas in your own words, then gives feedback on what you missed.',
+    ref: 'Chi et al. (1994), Cognitive Science · Dunlosky et al. (2013)' },
+  { t: 'Pre-testing', ev: ['mod', 'Moderate evidence'],
+    d: 'Attempting questions before you have learned the material, even if you get them wrong, improves later learning of that material, probably by priming attention to the key points.',
+    how: 'Before a new chapter, jot down questions or try the end-of-chapter problems cold. Then read to find the answers.',
+    app: 'New cards ask you to guess before showing the answer, which gives you a built-in pre-test.',
+    ref: 'Richland, Kornell & Kao (2009), Journal of Experimental Psychology: Applied' },
+  { t: 'Dual coding', ev: ['mod', 'Moderate evidence'],
+    d: 'Combining words with simple visuals (diagrams, sketches, timelines) gives memory two routes to the same idea. The benefit comes from visuals that carry real structure, not decoration.',
+    how: 'Redraw a process from memory. Turn a paragraph into a diagram, then explain the diagram.',
+    app: 'Describe the sketch in the answer, then draw it on paper as part of recall.',
+    ref: 'Paivio (1971), Imagery and Verbal Processes · Mayer, multimedia learning research' },
+  { t: 'Sleep', ev: ['high', 'Strong evidence'],
+    d: 'Sleep after learning helps consolidate new memories, and sleep deprivation before learning impairs encoding. Trading sleep for extra study hours is usually a net loss.',
+    how: 'Do a final review before bed. Keep a regular schedule. Skip all-nighters.',
+    app: 'The session summary reminds you to come back tomorrow, since sleep plus spacing work together.',
+    ref: 'Diekelmann & Born (2010), Nature Reviews Neuroscience' },
+  { t: 'Desirable difficulties: the unifying idea', ev: ['high', 'Core principle'],
+    d: 'Conditions that slow learning down in the moment (spacing, testing, interleaving, generating answers) often improve long-term retention, while smooth, fluent study (re-reading, massed practice) produces fast gains that fade. Feeling like it is easy is not evidence that it is working.',
+    how: 'If a study method feels comfortable, ask whether you are recalling or just recognizing. Judge your learning by what you can produce later, not what feels familiar.',
+    app: 'The app asks for an honest rating of how hard recall was; that feeds the schedule.',
+    ref: 'Bjork (1994) · Koriat & Bjork (2005), "illusions of competence"' },
+  { t: 'Using AI without fooling yourself', ev: ['mod', 'Emerging evidence'],
+    d: 'In a large field experiment, students given unrestricted access to a chatbot did better during practice but worse on a later exam without it, because the AI did the thinking for them. A tutor-style version that gave hints instead of answers largely avoided that harm.',
+    how: 'Try first, then ask. Use AI to explain and to quiz you, not to produce answers you copy. Re-explain its explanation in your own words.',
+    app: 'The tutor quizzes you and explains after you have attempted recall. AI cards are a draft to edit, not a replacement for your own thinking.',
+    ref: 'Bastani et al. (2025), PNAS, "Generative AI without guardrails can harm learning"' },
+  { t: 'Focus blocks and breaks', ev: ['low', 'Mixed / convention'],
+    d: 'The 25/5 Pomodoro rhythm is a popular convention, not a heavily validated protocol. There is reasonable support that brief breaks help sustain attention on long tasks, and that distraction (phones, multitasking) hurts learning. Treat the exact timings as adjustable.',
+    how: 'Work in focused blocks that suit you, with the phone out of reach. Take a short real break between them.',
+    app: 'The Focus tab has an adjustable timer.',
+    ref: 'Ariga & Lleras (2011), Cognition (brief breaks and sustained attention)' },
+  { t: 'What does NOT work well', ev: ['low', 'Weak evidence'],
+    d: 'Re-reading, highlighting and underlining, and summarizing by copying were rated low utility as primary strategies. "Learning styles" (the idea that you learn better when taught in your preferred visual/auditory/etc. style) has no good experimental support.',
+    how: 'Use highlighting and re-reading only as a first pass, then switch to self-testing. Choose the format that suits the content, not a supposed style.',
+    app: 'The app is built around testing rather than re-reading.',
+    ref: 'Dunlosky et al. (2013), Psychological Science in the Public Interest · Pashler et al. (2008), same journal' },
+];
+$('guideList').innerHTML = GUIDE.map(g => `
+  <div class="card tech"><h3>${esc(g.t)} <span class="pill ev-${g.ev[0]}">${esc(g.ev[1])}</span></h3>
+  <p>${esc(g.d)}</p><p><b>Try it:</b> ${esc(g.how)}</p><p><b>In this app:</b> ${esc(g.app)}</p><p class="ref">${esc(g.ref)}</p></div>`).join('') +
+  '<p class="hint">Summaries are simplified. Effect sizes vary by material, learner and test. Search the references for the details.</p>';
+
+/* ---------- init ---------- */
+localStorage.setItem(KEY, JSON.stringify(S));
+renderStudyHome(); refreshDecks(); tRender(); updateTutorVisibility();
+setSync('local');
+if (HOSTED) {
+  if (getPw()) sync(); else showLogin();
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  document.addEventListener('visibilitychange', () => { if (getPw()) sync(); }); // pull changes from other devices
+  window.addEventListener('online', () => getPw() && sync());
+}
+</script>
+</body>
+</html>
